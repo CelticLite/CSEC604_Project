@@ -31,7 +31,7 @@ def remote_host_refresh(partial_ip,highest_address):
         res = subprocess.call(['ping', '-c', '3', address])
         if res == 0:
             logger.info( "ping to", address, "OK")
-            remote_hosts.append((address,5500))
+            remote_hosts.append(address)
         elif res == 2:
             logger.info("no response from {}.".format(str(address)))
         else:
@@ -85,21 +85,21 @@ s = sender(_pub_key, _secret_key)
 logger.info("Sender obj created")
 
 # Send local public key 
-pubKey_sharing = threading.Thread(target=s._share_pub_key)
+pubKey_sharing = threading.Thread(target=s._share_pub_key,args=[len(remote_hosts)])
 pubKey_sharing.start()
 logger.info("Started sharing public key")
 
 # # open listener for each remote host, add their pubkey to list
 listeners = []
 for host in remote_hosts:
-    tmp_l = listener(host)
-    # tmp_l.set_port(host[1])
     tmp_pubKey = get_pub_key(host[0])
-    listeners.append((tmp_l,tmp_pubKey))
+    tmp_data_l = listener(host,5500,tmp_pubKey)
+    tmp_key_l = listener(host,1337,tmp_pubKey)
+    tmp_return_l = listener(host,6500,tmp_pubKey)
+    listeners.append([tmp_data_l,tmp_pubKey,tmp_key_l,tmp_return_l])
 
 
 
-new_data = False
 ## Constantly loop 
 while running : 
     hosts_that_need_response = []
@@ -108,33 +108,26 @@ while running :
         # if one of the hosts we are listening to is serving data
         if l[0].is_up():
             # connect and write the data to data_pre.csv
-            data = l[0].connect(l[1])
-            with open('data_pre.csv', 'w') as csvfile: 
-                # creating a csv writer object 
-                csvwriter = csv.writer(csvfile) 
-                # writing the data
-                csvwriter.writerow(data) 
-            new_data = True
-            hosts_that_need_response.append(l)
-
-
-    ## If data gets added to data source file, send it to be processed 
-    if new_data:
-        data_to_process = []
-        processed_data = []
-        with open('data_pre.csv', mode ='r')as data_file_pre:
-            rowcount = 0
-            for row in  csv.reader(data_file_pre):
-                data_to_process = []
-                for i in row:
-                    data_to_process.append(int(i))
-                processed_data.append(processor._process_data(data_to_process))
-        with open('data_post.csv', 'w') as data_file_post:
-            spamwriter = csv.writer(data_file_post)
-            # for data in processed_data:
-            spamwriter.writerow(processed_data)
-        new_data = False
-
+            data = l[0].connect()
+            if data:
+                processed_data = processor._process_data(data)
+                s._send(processed_data,1,6500)
+            else:
+                print("Signature was invalid.")
+                continue
+        # if one of the hosts we are listening to is serving a new public key
+        if l[2].is_up():
+            # connect and update public key
+            l[1] = l[2].connect()
+        if l[3].is_up():
+            data = l[3].connect()
+            if data:
+                with open('data_post.csv', 'w') as csvfile: 
+                    csvwriter = csv.writer(csvfile) 
+                    csvwriter.writerow(data)
+            else:
+                print("Signature was invalid.")
+                continue
 
 pubKey_sharing.join()
 remote_host_update.join()

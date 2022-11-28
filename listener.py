@@ -17,9 +17,9 @@ class listener():
     sk = SecretKey(512)
     pubKey = PublicKey(sk)
 
-    def __init__(self,host,key):
-        self.ip_address = host[0]
-        self.port = host[1]
+    def __init__(self,ip,port,key):
+        self.ip_address = ip
+        self.port = port
         self.pubKey = key
 
     def is_up(self):
