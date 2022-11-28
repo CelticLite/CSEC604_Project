@@ -24,6 +24,21 @@ def get_pub_key(ip_address):
     s = socket.create_connection((ip_address,1337))
     return s.recvmsg()
 
+def remote_host_refresh(partial_ip,highest_address):
+    remote_hosts = []
+    for ping in range(2,highest_address):
+        address = partial_ip + str(ping)
+        res = subprocess.call(['ping', '-c', '3', address])
+        if res == 0:
+            logger.info( "ping to", address, "OK")
+            remote_hosts.append((address,5500))
+        elif res == 2:
+            logger.info("no response from {}.".format(str(address)))
+        else:
+            logger.warning("ping to", address, "failed!") 
+
+
+
 ## Startup Options
 if len(sys.argv) == 1:
     sys.exit("ERROR : Too Few Arguments")
@@ -48,17 +63,8 @@ GLOBAL_N = 512
 ## Register our node with the rest of the nodes 
 # remote_hosts = [('192.168.0.20',5500)], ('192.168.0.30',5500), ('192.168.0.40',5500), ('192.168.0.50',5500), ('192.168.0.60',5500), ('192.168.0.70',5500), ('192.168.0.80',5500), ('192.168.0.90',5500)]
 # Find where nodes are:
-remote_hosts = []
-for ping in range(2,254):
-    address = "192.168.0." + str(ping)
-    res = subprocess.call(['ping', '-c', '3', address])
-    if res == 0:
-        logger.info( "ping to", address, "OK")
-        remote_hosts.append((address,5500))
-    elif res == 2:
-        logger.info("no response from {}.".format(str(address)))
-    else:
-        logger.warning("ping to", address, "failed!")
+remote_host_update = threading.Thread(target=remote_host_refresh,args=('192.168.0.',254))
+remote_host_update.start()
 
 # generate pub / private key pair
 if _secret_key:
@@ -97,7 +103,7 @@ new_data = False
 ## Constantly loop 
 while running : 
     hosts_that_need_response = []
-	## Listen for data (to process/receiving) 
+    ## Listen for data (to process/receiving) 
     for l in listeners:
         # if one of the hosts we are listening to is serving data
         if l[0].is_up():
@@ -112,7 +118,7 @@ while running :
             hosts_that_need_response.append(l)
 
 
-	## If data gets added to data source file, send it to be processed 
+    ## If data gets added to data source file, send it to be processed 
     if new_data:
         data_to_process = []
         processed_data = []
@@ -131,4 +137,5 @@ while running :
 
 
 pubKey_sharing.join()
+remote_host_update.join()
 
