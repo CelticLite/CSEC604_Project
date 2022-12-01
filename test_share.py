@@ -10,5 +10,5 @@ pubKey = PublicKey(prv_key)
 s = sender(pubKey,prv_key)
 print("Setup done\n")
 
-s._send([data,0],1)
+s._send([data,0],1,5500)
 print("sent successfully")

@@ -8,7 +8,7 @@ class processor():
 	def __init__(self,key):
 		self.key = key
 
-	def _process_data(data):
+	def _process_data(self,data):
 		### Find average of numbers in data[]
 		print(data)
 		average = 0

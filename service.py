@@ -11,6 +11,8 @@ import logging
 import csv
 import sys
 import threading
+import time
+import hashlib
 
 # Setting up Logging 
 logging.basicConfig(filename="runtime.log",
@@ -25,19 +27,31 @@ def get_pub_key(ip_address):
     return s.recvmsg()
 
 def remote_host_refresh(partial_ip,highest_address):
-    remote_hosts = []
-    for ping in range(2,highest_address):
-        address = partial_ip + str(ping)
-        res = subprocess.call(['ping', '-c', '3', address])
-        if res == 0:
-            logger.info( "ping to", address, "OK")
-            remote_hosts.append(address)
-        elif res == 2:
-            logger.info("no response from {}.".format(str(address)))
-        else:
-            logger.warning("ping to", address, "failed!") 
+    while True:
+        remote_hosts = []
+        for ping in range(2,highest_address):
+            address = partial_ip + str(ping)
+            res = subprocess.call(['ping', '-c', '3', address])
+            if res == 0:
+                logger.info( "ping to", address, "OK")
+                remote_hosts.append([get_pub_key(address),address])
+            elif res == 2:
+                logger.info("no response from {}.".format(str(address)))
+            else:
+                logger.warning("ping to", address, "failed!") 
+        time.sleep(3600)
 
-
+def hash_file(filename):
+    BUF_SIZE = 65536  # lets read stuff in 64kb chunks!
+    md5 = hashlib.md5()
+    with open(filename, 'rb') as f:
+        while True:
+            data = f.read(BUF_SIZE)
+            if not data:
+                break
+            md5.update(data)
+            sha1.update(data)
+    return md5.hexdigest()
 
 ## Startup Options
 if len(sys.argv) == 1:
@@ -61,7 +75,7 @@ else:
 GLOBAL_N = 512
 
 ## Register our node with the rest of the nodes 
-# remote_hosts = [('192.168.0.20',5500)], ('192.168.0.30',5500), ('192.168.0.40',5500), ('192.168.0.50',5500), ('192.168.0.60',5500), ('192.168.0.70',5500), ('192.168.0.80',5500), ('192.168.0.90',5500)]
+
 # Find where nodes are:
 remote_host_update = threading.Thread(target=remote_host_refresh,args=('192.168.0.',254))
 remote_host_update.start()
@@ -89,20 +103,23 @@ pubKey_sharing = threading.Thread(target=s._share_pub_key,args=[len(remote_hosts
 pubKey_sharing.start()
 logger.info("Started sharing public key")
 
-# # open listener for each remote host, add their pubkey to list
+## open listener for each remote host, add their pubkey to list
 listeners = []
 for host in remote_hosts:
     tmp_pubKey = get_pub_key(host[0])
-    tmp_data_l = listener(host,5500,tmp_pubKey)
-    tmp_key_l = listener(host,1337,tmp_pubKey)
-    tmp_return_l = listener(host,6500,tmp_pubKey)
+    tmp_data_l = listener(host[1],5500,tmp_pubKey)
+    tmp_key_l = listener(host[1],1337,tmp_pubKey)
+    tmp_return_l = listener(host[1],6500,tmp_pubKey)
     listeners.append([tmp_data_l,tmp_pubKey,tmp_key_l,tmp_return_l])
 
+# Stop Sharing Public Key 
+pubKey_sharing.join()
 
+## Define the input file for data to be shared
+file_hash = hash_file('data_in.csv')
 
 ## Constantly loop 
-while running : 
-    hosts_that_need_response = []
+while running: 
     ## Listen for data (to process/receiving) 
     for l in listeners:
         # if one of the hosts we are listening to is serving data
@@ -111,7 +128,7 @@ while running :
             data = l[0].connect()
             if data:
                 processed_data = processor._process_data(data)
-                s._send(processed_data,1,6500)
+                s._send(processed_data,1,6500) 
             else:
                 print("Signature was invalid.")
                 continue
@@ -129,6 +146,19 @@ while running :
                 print("Signature was invalid.")
                 continue
 
-pubKey_sharing.join()
+    ## Send Data to be processed 
+    if file_hash != hash_file('data_in.csv'):
+        data_to_process = []
+        with open('data_pre.csv','r') as csvfile:
+            csvreader = csv.reader(csvfile)
+            for row in csvreader:
+                data_to_process.append(row)
+        s._send(data_to_process,len(remote_hosts),5500)
+    else:
+        continue
+
+
 remote_host_update.join()
 
+
+### Possible addition : auto key rotate on a schedule 
