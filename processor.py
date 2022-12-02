@@ -22,5 +22,7 @@ class processor():
 		## Use the public key to verify the data sent 
 		return self.key.verify(data,sig)
 
+		
+
 
 

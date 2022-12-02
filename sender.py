@@ -44,20 +44,20 @@ class sender:
 		s = self.private_key.sign(data)
 		return s
 
-	def _send(self,data,num_hosts):
+	def _send(self,data,num_hosts,port):
 		# Send pre-porcessed data
 		client_count = 0 
 		print("Welcome to this simple data transfer tool")
 		server_side = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		try:
-			server_side.bind(('',self.port))
-			print(self.port)
-			logger.info("socket binded to {}".format(str(self.port)))
+			server_side.bind(('',port))
+			print(port)
+			logger.info("socket binded to {}".format(str(port)))
 		except OSError as err:
 			try:
-				self.port += random.randrange(500)
-				server_side.bind(('',self.port))
-				logger.info("socket binded to {}".format(str(self.port)))
+				port += random.randrange(500)
+				server_side.bind(('',port))
+				logger.info("socket binded to {}".format(str(port)))
 			except:
 				raise(err)
 		server_side.listen(num_hosts)
